@@ -30,6 +30,10 @@ def load_data():
 
 df = load_data()
 
+# Definir orden cronológico de meses
+ORDEN_MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
+               'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+
 # =====================
 # SIDEBAR - FILTROS
 # =====================
@@ -66,7 +70,7 @@ causa = st.sidebar.multiselect(
 
 mes = st.sidebar.multiselect(
     "Mes",
-    options=sorted(df.Mes_Nombre.unique()) if 'Mes_Nombre' in df.columns else [],
+    options=[m for m in ORDEN_MESES if m in df.Mes_Nombre.unique()] if 'Mes_Nombre' in df.columns else [],
     default=None,
     placeholder="TODOS"
 )
@@ -104,6 +108,14 @@ if causa and 'Causa' in df.columns:
 
 if mes and 'Mes_Nombre' in df.columns:
     df_f = df_f[df_f.Mes_Nombre.isin(mes)]
+
+# =====================
+# VALIDACIÓN DE DATOS FILTRADOS
+# =====================
+if df_f.empty:
+    st.error("⚠️ No se encontraron datos con los filtros seleccionados")
+    st.info("Por favor ajusta los filtros en el panel lateral para ver los análisis")
+    st.stop()
 
 # Mostrar filtros activos
 st.sidebar.markdown("---")
@@ -197,36 +209,46 @@ with col2:
 # =====================
 st.subheader("Mapa de Incendios")
 
-mapa = folium.Map(
-    location=[df_f.latitud.mean(), df_f.longitud.mean()],
-    zoom_start=5
-)
-
-# Usar una muestra determinística para evitar re-renderizado constante
-df_map = df_f.sample(min(2000, len(df_f)), random_state=42)
-
-for _, row in df_map.iterrows():
-    tooltip_text = f"""
-    <b>Estado:</b> {row.Estado}<br>
-    <b>Causa:</b> {row.Causa if 'Causa' in row else 'N/A'}<br>
-    <b>Hectáreas:</b> {row.Total_hectareas:.2f}<br>
-    <b>Latitud:</b> {row.latitud:.4f}<br>
-    <b>Longitud:</b> {row.longitud:.4f}
-    """
+# Validar que existan coordenadas válidas
+if df_f['latitud'].isna().all() or df_f['longitud'].isna().all():
+    st.warning("⚠️ No hay coordenadas válidas disponibles para mostrar el mapa con los filtros seleccionados")
+else:
+    # Filtrar registros con coordenadas válidas
+    df_map_valid = df_f.dropna(subset=['latitud', 'longitud'])
     
-    folium.CircleMarker(
-        location=[row.latitud, row.longitud],
-        radius=3,
-        popup=f"""
-        Estado: {row.Estado}<br>
-        Vegetación: {row.Tipo_Vegetacion}<br>
-        Hectáreas: {row.Total_hectareas}
-        """,
-        tooltip=tooltip_text,
-        fill=True
-    ).add_to(mapa)
-
-st_folium(mapa, width=None, height=500, returned_objects=[])
+    if len(df_map_valid) == 0:
+        st.warning("⚠️ No hay coordenadas válidas disponibles para mostrar el mapa con los filtros seleccionados")
+    else:
+        mapa = folium.Map(
+            location=[df_map_valid.latitud.mean(), df_map_valid.longitud.mean()],
+            zoom_start=5
+        )
+        
+        # Usar una muestra determinística para evitar re-renderizado constante
+        df_map = df_map_valid.sample(min(2000, len(df_map_valid)), random_state=42)
+        
+        for _, row in df_map.iterrows():
+            tooltip_text = f"""
+            <b>Estado:</b> {row.Estado}<br>
+            <b>Causa:</b> {row.Causa if 'Causa' in row else 'N/A'}<br>
+            <b>Hectáreas:</b> {row.Total_hectareas:.2f}<br>
+            <b>Latitud:</b> {row.latitud:.4f}<br>
+            <b>Longitud:</b> {row.longitud:.4f}
+            """
+            
+            folium.CircleMarker(
+                location=[row.latitud, row.longitud],
+                radius=3,
+                popup=f"""
+                Estado: {row.Estado}<br>
+                Vegetación: {row.Tipo_Vegetacion}<br>
+                Hectáreas: {row.Total_hectareas}
+                """,
+                tooltip=tooltip_text,
+                fill=True
+            ).add_to(mapa)
+        
+        st_folium(mapa, width=None, height=500, returned_objects=[])
 
 # =====================
 # RANKINGS DINÁMICOS
@@ -238,36 +260,41 @@ col1, col2 = st.columns(2)
 with col1:
     st.markdown("### Top 10 Municipios Más Afectados")
     
-    if 'Municipio' in df_f.columns:
+    if 'Municipio' in df_f.columns and len(df_f) > 0:
         top_municipios = df_f.groupby('Municipio').agg({
             'Total_hectareas': 'sum',
             'Estado': 'first'
         }).sort_values('Total_hectareas', ascending=False).head(10).reset_index()
         
-        top_municipios.columns = ['Municipio', 'Hectáreas Totales', 'Estado']
-        top_municipios['Hectáreas Totales'] = top_municipios['Hectáreas Totales'].apply(lambda x: f"{x:,.0f}")
-        
-        st.dataframe(top_municipios, use_container_width=True, hide_index=True)
+        if len(top_municipios) > 0:
+            top_municipios.columns = ['Municipio', 'Hectáreas Totales', 'Estado']
+            top_municipios['Hectáreas Totales'] = top_municipios['Hectáreas Totales'].apply(lambda x: f"{x:,.0f}")
+            st.dataframe(top_municipios, use_container_width=True, hide_index=True)
+        else:
+            st.info("⚠️ No hay suficientes datos para mostrar el ranking con los filtros actuales")
     else:
         st.warning("La columna 'Municipio' no está disponible en los datos.")
 
 with col2:
     st.markdown("### Top 10 Incendios Más Grandes")
     
-    top_incendios = df_f.nlargest(10, 'Total_hectareas')[
-        ['Estado', 'Municipio', 'Total_hectareas', 'Tipo_Vegetacion', 'anio']
-    ].copy() if 'Municipio' in df_f.columns else df_f.nlargest(10, 'Total_hectareas')[
-        ['Estado', 'Total_hectareas', 'Tipo_Vegetacion', 'anio']
-    ].copy()
-    
-    top_incendios['Total_hectareas'] = top_incendios['Total_hectareas'].apply(lambda x: f"{x:,.2f}")
-    
-    if 'Municipio' in top_incendios.columns:
-        top_incendios.columns = ['Estado', 'Municipio', 'Hectáreas', 'Vegetación', 'Año']
+    if len(df_f) > 0:
+        top_incendios = df_f.nlargest(min(10, len(df_f)), 'Total_hectareas')[
+            ['Estado', 'Municipio', 'Total_hectareas', 'Tipo_Vegetacion', 'anio']
+        ].copy() if 'Municipio' in df_f.columns else df_f.nlargest(min(10, len(df_f)), 'Total_hectareas')[
+            ['Estado', 'Total_hectareas', 'Tipo_Vegetacion', 'anio']
+        ].copy()
+        
+        top_incendios['Total_hectareas'] = top_incendios['Total_hectareas'].apply(lambda x: f"{x:,.2f}")
+        
+        if 'Municipio' in top_incendios.columns:
+            top_incendios.columns = ['Estado', 'Municipio', 'Hectáreas', 'Vegetación', 'Año']
+        else:
+            top_incendios.columns = ['Estado', 'Hectáreas', 'Vegetación', 'Año']
+        
+        st.dataframe(top_incendios, use_container_width=True, hide_index=True)
     else:
-        top_incendios.columns = ['Estado', 'Hectáreas', 'Vegetación', 'Año']
-    
-    st.dataframe(top_incendios, use_container_width=True, hide_index=True)
+        st.info("⚠️ No hay suficientes datos para mostrar el ranking con los filtros actuales")
 
 # =====================
 # EFICIENCIA OPERATIVA
@@ -377,18 +404,19 @@ with col4:
 # =====================
 st.subheader("Análisis de Causas y Prevención")
 
-if 'Causa' in df_f.columns:
+if 'Causa' in df_f.columns and len(df_f) > 0:
     # Distribución de causas - Pie chart
     causas_count = df_f['Causa'].value_counts().reset_index()
     causas_count.columns = ['Causa', 'Frecuencia']
     
-    fig = px.pie(
-        causas_count,
-        values='Frecuencia',
-        names='Causa',
-        title='Distribución de Incendios por Causa'
-    )
-    st.plotly_chart(fig, use_container_width=True)
+    if len(causas_count) > 0:
+        fig = px.pie(
+            causas_count,
+            values='Frecuencia',
+            names='Causa',
+            title='Distribución de Incendios por Causa'
+        )
+        st.plotly_chart(fig, use_container_width=True)
     
     # Evolución anual de causas
     causas_tiempo = df_f.groupby(['anio', 'Causa']).size().reset_index(name='Incendios')
@@ -444,24 +472,30 @@ else:
 # =====================
 st.subheader("Análisis de Estacionalidad")
 
-if 'Mes_Nombre' in df_f.columns:
+if 'Mes_Nombre' in df_f.columns and len(df_f) > 0:
     col1, col2 = st.columns(2)
     
     with col1:
         # Heatmap mes vs año
         estacionalidad = df_f.groupby(['anio', 'Mes_Nombre']).size().reset_index(name='Incendios')
-        pivot_estacional = estacionalidad.pivot(index='Mes_Nombre', columns='anio', values='Incendios').fillna(0)
         
-        fig = px.imshow(
-            pivot_estacional,
-            labels=dict(x="Año", y="Mes", color="Incendios"),
-            x=pivot_estacional.columns,
-            y=pivot_estacional.index,
-            color_continuous_scale='Reds',
-            title='Patrón Estacional de Incendios (Mes vs Año)',
-            aspect='auto'
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        if len(estacionalidad) > 0:
+            pivot_estacional = estacionalidad.pivot(index='Mes_Nombre', columns='anio', values='Incendios').fillna(0)
+            # Ordenar por meses cronológicamente
+            pivot_estacional = pivot_estacional.reindex([m for m in ORDEN_MESES if m in pivot_estacional.index])
+            
+            fig = px.imshow(
+                pivot_estacional,
+                labels=dict(x="Año", y="Mes", color="Incendios"),
+                x=pivot_estacional.columns,
+                y=pivot_estacional.index,
+                color_continuous_scale='Reds',
+                title='Patrón Estacional de Incendios (Mes vs Año)',
+                aspect='auto'
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("⚠️ No hay suficientes datos para mostrar el patrón estacional con los filtros actuales")
     
     with col2:
         # Calendario mensual de incendios
@@ -474,7 +508,8 @@ if 'Mes_Nombre' in df_f.columns:
             title='Distribución Mensual de Incendios',
             labels={'Mes_Nombre': 'Mes', 'Total_Incendios': 'Número de Incendios'},
             color='Total_Incendios',
-            color_continuous_scale='Oranges'
+            color_continuous_scale='Oranges',
+            category_orders={'Mes_Nombre': ORDEN_MESES}
         )
         st.plotly_chart(fig, use_container_width=True)
     
@@ -603,7 +638,8 @@ if len(df_f['anio'].unique()) >= 2:
             color='anio',
             title=f'Comparación Mensual {anio_anterior} vs {anio_actual}',
             labels={'Mes_Nombre': 'Mes', 'Incendios': 'Número de Incendios', 'anio': 'Año'},
-            markers=True
+            markers=True,
+            category_orders={'Mes_Nombre': ORDEN_MESES}
         )
         st.plotly_chart(fig, use_container_width=True)
 else:
@@ -782,54 +818,57 @@ tendencia_anual = df_f.groupby('anio').agg({
 }).reset_index()
 tendencia_anual.columns = ['Año', 'Hectareas_Totales']
 
-# Agregar línea de tendencia
-from sklearn.linear_model import LinearRegression
+if len(tendencia_anual) >= 2:
+    # Agregar línea de tendencia
+    from sklearn.linear_model import LinearRegression
 
-X = tendencia_anual[['Año']].values
-y = tendencia_anual['Hectareas_Totales'].values
+    X = tendencia_anual[['Año']].values
+    y = tendencia_anual['Hectareas_Totales'].values
 
-modelo = LinearRegression()
-modelo.fit(X, y)
+    modelo = LinearRegression()
+    modelo.fit(X, y)
 
-# Proyección próximos 3 años
-anios_futuros = np.array([[tendencia_anual['Año'].max() + i] for i in range(1, 4)])
-proyeccion = modelo.predict(anios_futuros)
+    # Proyección próximos 3 años
+    anios_futuros = np.array([[tendencia_anual['Año'].max() + i] for i in range(1, 4)])
+    proyeccion = modelo.predict(anios_futuros)
 
-# Crear dataframe para gráfica
-proyeccion_df = pd.DataFrame({
-    'Año': anios_futuros.flatten(),
-    'Hectareas_Totales': proyeccion,
-    'Tipo': 'Proyección'
-})
+    # Crear dataframe para gráfica
+    proyeccion_df = pd.DataFrame({
+        'Año': anios_futuros.flatten(),
+        'Hectareas_Totales': proyeccion,
+        'Tipo': 'Proyección'
+    })
 
-tendencia_anual['Tipo'] = 'Histórico'
-datos_completos = pd.concat([tendencia_anual, proyeccion_df])
+    tendencia_anual['Tipo'] = 'Histórico'
+    datos_completos = pd.concat([tendencia_anual, proyeccion_df])
 
-fig = px.line(
-    datos_completos,
-    x='Año',
-    y='Hectareas_Totales',
-    color='Tipo',
-    title='Tendencia Histórica y Proyección de Hectáreas Quemadas',
-    labels={'Hectareas_Totales': 'Hectáreas Totales', 'Año': 'Año'},
-    markers=True
-)
-fig.update_traces(line=dict(dash='dash'), selector=dict(name='Proyección'))
-st.plotly_chart(fig, use_container_width=True)
+    fig = px.line(
+        datos_completos,
+        x='Año',
+        y='Hectareas_Totales',
+        color='Tipo',
+        title='Tendencia Histórica y Proyección de Hectáreas Quemadas',
+        labels={'Hectareas_Totales': 'Hectáreas Totales', 'Año': 'Año'},
+        markers=True
+    )
+    fig.update_traces(line=dict(dash='dash'), selector=dict(name='Proyección'))
+    st.plotly_chart(fig, use_container_width=True)
 
-# Tendencia de incidentes
-tendencia_incidentes = df_f.groupby('anio').size().reset_index(name='Incendios')
-X_inc = tendencia_incidentes[['anio']].values
-y_inc = tendencia_incidentes['Incendios'].values
+    # Tendencia de incidentes
+    tendencia_incidentes = df_f.groupby('anio').size().reset_index(name='Incendios')
+    X_inc = tendencia_incidentes[['anio']].values
+    y_inc = tendencia_incidentes['Incendios'].values
 
-modelo_inc = LinearRegression()
-modelo_inc.fit(X_inc, y_inc)
-tendencia_inc = modelo_inc.coef_[0]
+    modelo_inc = LinearRegression()
+    modelo_inc.fit(X_inc, y_inc)
+    tendencia_inc = modelo_inc.coef_[0]
 
-if tendencia_inc > 0:
-    st.warning(f"Tendencia al alza: +{tendencia_inc:.1f} incendios/año promedio")
+    if tendencia_inc > 0:
+        st.warning(f"Tendencia al alza: +{tendencia_inc:.1f} incendios/año promedio")
+    else:
+        st.success(f"Tendencia a la baja: {tendencia_inc:.1f} incendios/año promedio")
 else:
-    st.success(f"Tendencia a la baja: {tendencia_inc:.1f} incendios/año promedio")
+    st.info("⚠️ Se requieren datos de al menos 2 años diferentes para generar proyecciones")
 
 # =====================
 # ANÁLISIS COSTO-BENEFICIO
@@ -914,34 +953,41 @@ vars_pca = [
     "Herbaceo", "Hojarasca", "Total_hectareas", "Duracion"
 ]
 
-df_pca = df_f[vars_pca].dropna()
+# Verificar que existan las columnas necesarias
+if all(col in df_f.columns for col in vars_pca):
+    df_pca = df_f[vars_pca].dropna()
+    
+    if len(df_pca) >= 2:
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(df_pca)
 
-scaler = StandardScaler()
-X_scaled = scaler.fit_transform(df_pca)
+        pca = PCA(n_components=2)
+        components = pca.fit_transform(X_scaled)
 
-pca = PCA(n_components=2)
-components = pca.fit_transform(X_scaled)
+        df_pca_vis = pd.DataFrame(
+            components,
+            columns=["PC1", "PC2"]
+        )
 
-df_pca_vis = pd.DataFrame(
-    components,
-    columns=["PC1", "PC2"]
-)
+        df_pca_vis["Tipo_Vegetacion"] = df_f.loc[df_pca.index, "Tipo_Vegetacion"].values
 
-df_pca_vis["Tipo_Vegetacion"] = df_f.loc[df_pca.index, "Tipo_Vegetacion"].values
-
-fig = px.scatter(
-    df_pca_vis,
-    x="PC1",
-    y="PC2",
-    color="Tipo_Vegetacion",
-    title="PCA de Incendios Forestales"
-)
-st.plotly_chart(fig, use_container_width=True)
-
-st.caption(
-    f"Varianza explicada: PC1 = {pca.explained_variance_ratio_[0]:.2%}, "
-    f"PC2 = {pca.explained_variance_ratio_[1]:.2%}"
-)
+        fig = px.scatter(
+            df_pca_vis,
+            x="PC1",
+            y="PC2",
+            color="Tipo_Vegetacion",
+            title="PCA de Incendios Forestales"
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        
+        st.caption(
+            f"Varianza explicada: PC1 = {pca.explained_variance_ratio_[0]:.2%}, "
+            f"PC2 = {pca.explained_variance_ratio_[1]:.2%}"
+        )
+    else:
+        st.info("⚠️ No hay suficientes datos válidos para realizar el análisis PCA con los filtros actuales (se requieren al menos 2 registros completos)")
+else:
+    st.warning("⚠️ No están disponibles todas las columnas necesarias para el análisis PCA")
 
 # =====================
 # CORRELACIÓN DE PEARSON
@@ -957,47 +1003,56 @@ vars_corr = [
 # Filtrar solo las columnas que existen en el DataFrame
 vars_corr_disponibles = [var for var in vars_corr if var in df_f.columns]
 
-df_corr = df_f[vars_corr_disponibles].dropna()
+if len(vars_corr_disponibles) >= 2:
+    df_corr = df_f[vars_corr_disponibles].dropna()
+    
+    if len(df_corr) >= 2:
+        # Calcular la matriz de correlación de Pearson
+        corr_matrix = df_corr.corr()
 
-# Calcular la matriz de correlación de Pearson
-corr_matrix = df_corr.corr()
+        # Crear heatmap con plotly
+        fig = px.imshow(
+            corr_matrix,
+            text_auto='.2f',
+            color_continuous_scale='RdBu_r',
+            aspect="auto",
+            title="Correlación de Pearson entre Variables",
+            labels=dict(color="Correlación"),
+            zmin=-1,
+            zmax=1
+        )
 
-# Crear heatmap con plotly
-fig = px.imshow(
-    corr_matrix,
-    text_auto='.2f',
-    color_continuous_scale='RdBu_r',
-    aspect="auto",
-    title="Correlación de Pearson entre Variables",
-    labels=dict(color="Correlación"),
-    zmin=-1,
-    zmax=1
-)
+        fig.update_xaxes(side="bottom")
+        fig.update_layout(height=500)
 
-fig.update_xaxes(side="bottom")
-fig.update_layout(height=500)
+        st.plotly_chart(fig, use_container_width=True)
 
-st.plotly_chart(fig, use_container_width=True)
+        # Mostrar las correlaciones más fuertes
+        st.markdown("**Top 5 correlaciones más fuertes:**")
 
-# Mostrar las correlaciones más fuertes
-st.markdown("**Top 5 correlaciones más fuertes:**")
+        # Obtener pares de correlaciones sin duplicados
+        corr_pairs = []
+        for i in range(len(corr_matrix.columns)):
+            for j in range(i+1, len(corr_matrix.columns)):
+                corr_pairs.append({
+                    'Variable 1': corr_matrix.columns[i],
+                    'Variable 2': corr_matrix.columns[j],
+                    'Correlación': corr_matrix.iloc[i, j]
+                })
 
-# Obtener pares de correlaciones sin duplicados
-corr_pairs = []
-for i in range(len(corr_matrix.columns)):
-    for j in range(i+1, len(corr_matrix.columns)):
-        corr_pairs.append({
-            'Variable 1': corr_matrix.columns[i],
-            'Variable 2': corr_matrix.columns[j],
-            'Correlación': corr_matrix.iloc[i, j]
-        })
+        if len(corr_pairs) > 0:
+            df_corr_pairs = pd.DataFrame(corr_pairs)
+            df_corr_pairs = df_corr_pairs.reindex(
+                df_corr_pairs['Correlación'].abs().sort_values(ascending=False).index
+            ).head(5)
 
-df_corr_pairs = pd.DataFrame(corr_pairs)
-df_corr_pairs = df_corr_pairs.reindex(
-    df_corr_pairs['Correlación'].abs().sort_values(ascending=False).index
-).head(5)
-
-st.dataframe(df_corr_pairs, use_container_width=True, hide_index=True)
+            st.dataframe(df_corr_pairs, use_container_width=True, hide_index=True)
+        else:
+            st.info("⚠️ No hay suficientes variables para calcular correlaciones")
+    else:
+        st.info("⚠️ No hay suficientes datos válidos para calcular correlaciones con los filtros actuales")
+else:
+    st.warning("⚠️ Se requieren al menos 2 variables para calcular correlaciones")
 
 # =====================
 # TABLA DE DATOS
