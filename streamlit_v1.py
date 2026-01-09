@@ -134,7 +134,10 @@ mapa = folium.Map(
     zoom_start=5
 )
 
-for _, row in df_f.sample(min(2000, len(df_f))).iterrows():
+# Usar una muestra determinística para evitar re-renderizado constante
+df_map = df_f.sample(min(2000, len(df_f)), random_state=42)
+
+for _, row in df_map.iterrows():
     folium.CircleMarker(
         location=[row.latitud, row.longitud],
         radius=3,
@@ -146,7 +149,7 @@ for _, row in df_f.sample(min(2000, len(df_f))).iterrows():
         fill=True
     ).add_to(mapa)
 
-st_folium(mapa, use_container_width=True)
+st_folium(mapa, width=None, height=500, returned_objects=[])
 
 # =====================
 # EFICIENCIA OPERATIVA

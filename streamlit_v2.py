@@ -1,4 +1,4 @@
-import streamlit_chat as st
+import streamlit_v1 as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
