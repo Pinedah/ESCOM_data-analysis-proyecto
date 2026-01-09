@@ -136,8 +136,8 @@ c1, c2, c3, c4, c5, c6 = st.columns(6)
 
 c1.metric("Total de incendios", f"{len(df_f):,}")
 c2.metric("Hectáreas quemadas", f"{df_f.Total_hectareas.sum():,.0f}")
-c3.metric("Duración promedio", f"{df_f.Duracion.mean():.2f} hrs")
-c4.metric("Tiempo de llegada", f"{df_f.Llegada.mean():.2f}")
+c3.metric("Duración promedio", f"{(df_f.Duracion.mean() / 3600):.2f} hrs")
+c4.metric("Tiempo de llegada", f"{(df_f.Llegada.mean() / 3600):.2f} hrs")
 c5.metric("Estados afectados", f"{df_f.Estado.nunique()}")
 c6.metric("Vegetación más afectada", df_f.Tipo_Vegetacion.value_counts().index[0] if len(df_f) > 0 else "N/A")
 
@@ -228,18 +228,148 @@ for _, row in df_map.iterrows():
 st_folium(mapa, width=None, height=500, returned_objects=[])
 
 # =====================
+# RANKINGS DINÁMICOS
+# =====================
+st.subheader("Rankings de Incendios")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    st.markdown("### Top 10 Municipios Más Afectados")
+    
+    if 'Municipio' in df_f.columns:
+        top_municipios = df_f.groupby('Municipio').agg({
+            'Total_hectareas': 'sum',
+            'Estado': 'first'
+        }).sort_values('Total_hectareas', ascending=False).head(10).reset_index()
+        
+        top_municipios.columns = ['Municipio', 'Hectáreas Totales', 'Estado']
+        top_municipios['Hectáreas Totales'] = top_municipios['Hectáreas Totales'].apply(lambda x: f"{x:,.0f}")
+        
+        st.dataframe(top_municipios, use_container_width=True, hide_index=True)
+    else:
+        st.warning("La columna 'Municipio' no está disponible en los datos.")
+
+with col2:
+    st.markdown("### Top 10 Incendios Más Grandes")
+    
+    top_incendios = df_f.nlargest(10, 'Total_hectareas')[
+        ['Estado', 'Municipio', 'Total_hectareas', 'Tipo_Vegetacion', 'anio']
+    ].copy() if 'Municipio' in df_f.columns else df_f.nlargest(10, 'Total_hectareas')[
+        ['Estado', 'Total_hectareas', 'Tipo_Vegetacion', 'anio']
+    ].copy()
+    
+    top_incendios['Total_hectareas'] = top_incendios['Total_hectareas'].apply(lambda x: f"{x:,.2f}")
+    
+    if 'Municipio' in top_incendios.columns:
+        top_incendios.columns = ['Estado', 'Municipio', 'Hectáreas', 'Vegetación', 'Año']
+    else:
+        top_incendios.columns = ['Estado', 'Hectáreas', 'Vegetación', 'Año']
+    
+    st.dataframe(top_incendios, use_container_width=True, hide_index=True)
+
+# =====================
 # EFICIENCIA OPERATIVA
 # =====================
-st.subheader("Eficiencia de Respuesta")
+st.subheader("Eficiencia Operativa")
 
+# Indicadores clave
+col1, col2 = st.columns(2)
+
+with col1:
+    # % de incendios atendidos rápidamente (menos de 2 horas)
+    if len(df_f) > 0:
+        rapidos = (df_f['Llegada'] <= 7200).sum()  # 2 horas = 7200 segundos
+        pct_rapidos = (rapidos / len(df_f)) * 100
+        st.metric("Incendios atendidos rápidamente", f"{pct_rapidos:.1f}%", 
+                  help="Porcentaje de incendios con tiempo de llegada ≤ 2 horas")
+    else:
+        st.metric("Incendios atendidos rápidamente", "N/A")
+
+with col2:
+    # Estimación de reducción de daño por respuesta temprana
+    if len(df_f) > 0 and 'Llegada' in df_f.columns and 'Total_hectareas' in df_f.columns:
+        # Calcular promedio de hectáreas para respuestas rápidas vs lentas
+        df_temp = df_f[df_f['Llegada'] > 0].copy()
+        rapidos_ha = df_temp[df_temp['Llegada'] <= 7200]['Total_hectareas'].mean()  # 2 horas = 7200 segundos
+        lentos_ha = df_temp[df_temp['Llegada'] > 7200]['Total_hectareas'].mean()
+        
+        if pd.notna(rapidos_ha) and pd.notna(lentos_ha) and lentos_ha > 0:
+            reduccion = ((lentos_ha - rapidos_ha) / lentos_ha) * 100
+            st.metric("Reducción de daño estimada", f"{reduccion:.1f}%",
+                     help="Reducción promedio de hectáreas por respuesta temprana (≤2 hrs)")
+        else:
+            st.metric("Reducción de daño estimada", "N/A")
+    else:
+        st.metric("Reducción de daño estimada", "N/A")
+
+st.markdown("---")
+
+# Scatter: tiempo de llegada vs hectáreas
+df_temp = df_f.copy()
+df_temp['Llegada_hrs'] = df_temp['Llegada'] / 3600
 fig = px.scatter(
-    df_f,
-    x="Llegada",
+    df_temp,
+    x="Llegada_hrs",
     y="Total_hectareas",
     color="Tipo_Vegetacion",
-    title="Tiempo de Llegada vs Daño"
+    title="Tiempo de Llegada vs Hectáreas Afectadas",
+    labels={"Llegada_hrs": "Tiempo de Llegada (hrs)", "Total_hectareas": "Hectáreas"}
 )
 st.plotly_chart(fig, use_container_width=True)
+
+# Scatter: detección vs duración
+if 'Deteccion' in df_f.columns and 'Duracion' in df_f.columns:
+    df_temp = df_f.copy()
+    df_temp['Duracion_hrs'] = df_temp['Duracion'] / 3600
+    fig = px.scatter(
+        df_temp,
+        x="Deteccion",
+        y="Duracion_hrs",
+        color="Tipo_Vegetacion",
+        title="Tiempo de Detección vs Duración del Incendio",
+        labels={"Deteccion": "Tiempo de Detección (hrs)", "Duracion_hrs": "Duración (hrs)"}
+    )
+    st.plotly_chart(fig, use_container_width=True)
+else:
+    st.info("Datos de 'Deteccion' no disponibles")
+
+col3, col4 = st.columns(2)
+
+with col3:
+    # Boxplot: tiempo de llegada por región/estado
+    df_temp = df_f.copy()
+    df_temp['Llegada_hrs'] = df_temp['Llegada'] / 3600
+    fig = px.box(
+        df_temp,
+        x="Estado",
+        y="Llegada_hrs",
+        title="Tiempo de Llegada por Estado",
+        labels={"Estado": "Estado", "Llegada_hrs": "Tiempo de Llegada (hrs)"}
+    )
+    fig.update_xaxes(tickangle=45)
+    st.plotly_chart(fig, use_container_width=True)
+
+with col4:
+    # Heatmap: región vs duración promedio
+    if 'Duracion' in df_f.columns:
+        duracion_estado = df_f.groupby('Estado')['Duracion'].mean().reset_index()
+        duracion_estado['Duracion'] = duracion_estado['Duracion'] / 3600
+        duracion_estado = duracion_estado.sort_values('Duracion', ascending=False)
+        
+        fig = px.bar(
+            duracion_estado.head(15),
+            x="Estado",
+            y="Duracion",
+            title="Duración Promedio por Estado (Top 15)",
+            labels={"Estado": "Estado", "Duracion": "Duración Promedio (hrs)"},
+            color="Duracion",
+            color_continuous_scale="Reds"
+        )
+        fig.update_xaxes(tickangle=45)
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("Datos de 'Duracion' no disponibles")
 
 # =====================
 # PCA - ANÁLISIS AVANZADO
