@@ -132,12 +132,14 @@ else:
 # =====================
 st.subheader("Indicadores Clave")
 
-c1, c2, c3, c4 = st.columns(4)
+c1, c2, c3, c4, c5, c6 = st.columns(6)
 
-c1.metric("Incendios", len(df_f))
-c2.metric("Hectáreas Quemadas", f"{df_f.Total_hectareas.sum():,.0f}")
-c3.metric("Duración Promedio (hrs)", f"{df_f.Duracion.mean():.2f}")
-c4.metric("Tiempo Llegada Promedio", f"{df_f.Llegada.mean():.2f}")
+c1.metric("Total de incendios", f"{len(df_f):,}")
+c2.metric("Hectáreas quemadas", f"{df_f.Total_hectareas.sum():,.0f}")
+c3.metric("Duración promedio", f"{df_f.Duracion.mean():.2f} hrs")
+c4.metric("Tiempo de llegada", f"{df_f.Llegada.mean():.2f}")
+c5.metric("Estados afectados", f"{df_f.Estado.nunique()}")
+c6.metric("Vegetación más afectada", df_f.Tipo_Vegetacion.value_counts().index[0] if len(df_f) > 0 else "N/A")
 
 # =====================
 # ANÁLISIS TEMPORAL
