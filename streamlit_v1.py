@@ -244,7 +244,7 @@ st.plotly_chart(fig, use_container_width=True)
 # =====================
 # PCA - ANÁLISIS AVANZADO
 # =====================
-st.subheader("Análisis Multivariable (PCA)")
+st.subheader("Análisis de Componentes Principales (PCA)")
 
 vars_pca = [
     "Arbolado_Adulto", "Renuevo", "Arbustivo",
@@ -264,14 +264,14 @@ df_pca_vis = pd.DataFrame(
     columns=["PC1", "PC2"]
 )
 
-df_pca_vis["Tipo_Vegetacion"] = df_f.loc[df_pca.index, "Tipo_Vegetacion"]
+df_pca_vis["Tipo_Vegetacion"] = df_f.loc[df_pca.index, "Tipo_Vegetacion"].values
 
 fig = px.scatter(
     df_pca_vis,
     x="PC1",
     y="PC2",
     color="Tipo_Vegetacion",
-    title="PCA de Incendios"
+    title="PCA de Incendios Forestales"
 )
 st.plotly_chart(fig, use_container_width=True)
 
@@ -279,6 +279,62 @@ st.caption(
     f"Varianza explicada: PC1 = {pca.explained_variance_ratio_[0]:.2%}, "
     f"PC2 = {pca.explained_variance_ratio_[1]:.2%}"
 )
+
+# =====================
+# CORRELACIÓN DE PEARSON
+# =====================
+st.subheader("Matriz de Correlación de Pearson")
+
+vars_corr = [
+    "Arbolado_Adulto", "Renuevo", "Arbustivo",
+    "Herbaceo", "Hojarasca", "Total_hectareas", 
+    "Duracion", "Llegada"
+]
+
+# Filtrar solo las columnas que existen en el DataFrame
+vars_corr_disponibles = [var for var in vars_corr if var in df_f.columns]
+
+df_corr = df_f[vars_corr_disponibles].dropna()
+
+# Calcular la matriz de correlación de Pearson
+corr_matrix = df_corr.corr()
+
+# Crear heatmap con plotly
+fig = px.imshow(
+    corr_matrix,
+    text_auto='.2f',
+    color_continuous_scale='RdBu_r',
+    aspect="auto",
+    title="Correlación de Pearson entre Variables",
+    labels=dict(color="Correlación"),
+    zmin=-1,
+    zmax=1
+)
+
+fig.update_xaxes(side="bottom")
+fig.update_layout(height=500)
+
+st.plotly_chart(fig, use_container_width=True)
+
+# Mostrar las correlaciones más fuertes
+st.markdown("**Top 5 correlaciones más fuertes:**")
+
+# Obtener pares de correlaciones sin duplicados
+corr_pairs = []
+for i in range(len(corr_matrix.columns)):
+    for j in range(i+1, len(corr_matrix.columns)):
+        corr_pairs.append({
+            'Variable 1': corr_matrix.columns[i],
+            'Variable 2': corr_matrix.columns[j],
+            'Correlación': corr_matrix.iloc[i, j]
+        })
+
+df_corr_pairs = pd.DataFrame(corr_pairs)
+df_corr_pairs = df_corr_pairs.reindex(
+    df_corr_pairs['Correlación'].abs().sort_values(ascending=False).index
+).head(5)
+
+st.dataframe(df_corr_pairs, use_container_width=True, hide_index=True)
 
 # =====================
 # TABLA DE DATOS
