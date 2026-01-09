@@ -138,6 +138,14 @@ mapa = folium.Map(
 df_map = df_f.sample(min(2000, len(df_f)), random_state=42)
 
 for _, row in df_map.iterrows():
+    tooltip_text = f"""
+    <b>Estado:</b> {row.Estado}<br>
+    <b>Causa:</b> {row.Causa if 'Causa' in row else 'N/A'}<br>
+    <b>Hectáreas:</b> {row.Total_hectareas:.2f}<br>
+    <b>Latitud:</b> {row.latitud:.4f}<br>
+    <b>Longitud:</b> {row.longitud:.4f}
+    """
+    
     folium.CircleMarker(
         location=[row.latitud, row.longitud],
         radius=3,
@@ -146,6 +154,7 @@ for _, row in df_map.iterrows():
         Vegetación: {row.Tipo_Vegetacion}<br>
         Hectáreas: {row.Total_hectareas}
         """,
+        tooltip=tooltip_text,
         fill=True
     ).add_to(mapa)
 
