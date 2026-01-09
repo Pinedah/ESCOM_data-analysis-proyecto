@@ -66,7 +66,7 @@ causa = st.sidebar.multiselect(
 
 mes = st.sidebar.multiselect(
     "Mes",
-    options=sorted(df.mes.unique()) if 'mes' in df.columns else [],
+    options=sorted(df.Mes_Nombre.unique()) if 'Mes_Nombre' in df.columns else [],
     default=None,
     placeholder="TODOS"
 )
@@ -102,8 +102,8 @@ if vegetacion:
 if causa and 'Causa' in df.columns:
     df_f = df_f[df_f.Causa.isin(causa)]
 
-if mes and 'mes' in df.columns:
-    df_f = df_f[df_f.mes.isin(mes)]
+if mes and 'Mes_Nombre' in df.columns:
+    df_f = df_f[df_f.Mes_Nombre.isin(mes)]
 
 # Mostrar filtros activos
 st.sidebar.markdown("---")
@@ -444,13 +444,13 @@ else:
 # =====================
 st.subheader("Análisis de Estacionalidad")
 
-if 'mes' in df_f.columns:
+if 'Mes_Nombre' in df_f.columns:
     col1, col2 = st.columns(2)
     
     with col1:
         # Heatmap mes vs año
-        estacionalidad = df_f.groupby(['anio', 'mes']).size().reset_index(name='Incendios')
-        pivot_estacional = estacionalidad.pivot(index='mes', columns='anio', values='Incendios').fillna(0)
+        estacionalidad = df_f.groupby(['anio', 'Mes_Nombre']).size().reset_index(name='Incendios')
+        pivot_estacional = estacionalidad.pivot(index='Mes_Nombre', columns='anio', values='Incendios').fillna(0)
         
         fig = px.imshow(
             pivot_estacional,
@@ -465,24 +465,24 @@ if 'mes' in df_f.columns:
     
     with col2:
         # Calendario mensual de incendios
-        incendios_mes = df_f.groupby('mes').size().reset_index(name='Total_Incendios')
+        incendios_mes = df_f.groupby('Mes_Nombre').size().reset_index(name='Total_Incendios')
         
         fig = px.bar(
             incendios_mes,
-            x='mes',
+            x='Mes_Nombre',
             y='Total_Incendios',
             title='Distribución Mensual de Incendios',
-            labels={'mes': 'Mes', 'Total_Incendios': 'Número de Incendios'},
+            labels={'Mes_Nombre': 'Mes', 'Total_Incendios': 'Número de Incendios'},
             color='Total_Incendios',
             color_continuous_scale='Oranges'
         )
         st.plotly_chart(fig, use_container_width=True)
     
     # Insight estacional
-    mes_critico = df_f.groupby('mes').size().idxmax()
+    mes_critico = df_f.groupby('Mes_Nombre').size().idxmax()
     st.info(f"Mes crítico: **{mes_critico}** - Aumentar recursos preventivos en este período")
 else:
-    st.warning("Datos de 'mes' no disponibles")
+    st.warning("Datos de 'Mes_Nombre' no disponibles")
 
 # =====================
 # CLASIFICACIÓN POR SEVERIDAD
@@ -593,16 +593,16 @@ if len(df_f['anio'].unique()) >= 2:
         )
     
     # Variación porcentual YoY por mes
-    if 'mes' in df_f.columns:
-        yoy_mes = df_f[df_f['anio'].isin([anio_actual, anio_anterior])].groupby(['anio', 'mes']).size().reset_index(name='Incendios')
+    if 'Mes_Nombre' in df_f.columns:
+        yoy_mes = df_f[df_f['anio'].isin([anio_actual, anio_anterior])].groupby(['anio', 'Mes_Nombre']).size().reset_index(name='Incendios')
         
         fig = px.line(
             yoy_mes,
-            x='mes',
+            x='Mes_Nombre',
             y='Incendios',
             color='anio',
             title=f'Comparación Mensual {anio_anterior} vs {anio_actual}',
-            labels={'mes': 'Mes', 'Incendios': 'Número de Incendios', 'anio': 'Año'},
+            labels={'Mes_Nombre': 'Mes', 'Incendios': 'Número de Incendios', 'anio': 'Año'},
             markers=True
         )
         st.plotly_chart(fig, use_container_width=True)
