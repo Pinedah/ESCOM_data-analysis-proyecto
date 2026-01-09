@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
+import plotly.graph_objects as go
 
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
@@ -370,6 +371,538 @@ with col4:
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("Datos de 'Duracion' no disponibles")
+
+# =====================
+# CAUSAS Y PREVENCIÓN
+# =====================
+st.subheader("Análisis de Causas y Prevención")
+
+if 'Causa' in df_f.columns:
+    # Distribución de causas - Pie chart
+    causas_count = df_f['Causa'].value_counts().reset_index()
+    causas_count.columns = ['Causa', 'Frecuencia']
+    
+    fig = px.pie(
+        causas_count,
+        values='Frecuencia',
+        names='Causa',
+        title='Distribución de Incendios por Causa'
+    )
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Evolución anual de causas
+    causas_tiempo = df_f.groupby(['anio', 'Causa']).size().reset_index(name='Incendios')
+    
+    fig = px.line(
+        causas_tiempo,
+        x='anio',
+        y='Incendios',
+        color='Causa',
+        title='Evolución Temporal de Causas',
+        labels={'anio': 'Año', 'Incendios': 'Número de Incendios'}
+    )
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Sankey: Causa → Vegetación → Impacto
+    # Preparar datos para Sankey
+    sankey_data = df_f.groupby(['Causa', 'Tipo_Vegetacion'])['Total_hectareas'].sum().reset_index()
+    sankey_data = sankey_data.nlargest(15, 'Total_hectareas')  # Top 15 para legibilidad
+    
+    # Crear nodos únicos
+    causas_unicas = sankey_data['Causa'].unique().tolist()
+    vegetacion_unica = sankey_data['Tipo_Vegetacion'].unique().tolist()
+    
+    all_nodes = causas_unicas + vegetacion_unica
+    
+    # Crear índices para source y target
+    source = [all_nodes.index(causa) for causa in sankey_data['Causa']]
+    target = [all_nodes.index(veg) for veg in sankey_data['Tipo_Vegetacion']]
+    value = sankey_data['Total_hectareas'].tolist()
+    
+    fig = go.Figure(data=[go.Sankey(
+        node=dict(
+            pad=15,
+            thickness=20,
+            line=dict(color="black", width=0.5),
+            label=all_nodes
+        ),
+        link=dict(
+            source=source,
+            target=target,
+            value=value
+        )
+    )])
+    
+    fig.update_layout(title_text="Flujo: Causa → Tipo de Vegetación", height=400)
+    st.plotly_chart(fig, use_container_width=True)
+    
+else:
+    st.warning("La columna 'Causa' no está disponible en los datos.")
+
+# =====================
+# ANÁLISIS DE ESTACIONALIDAD
+# =====================
+st.subheader("Análisis de Estacionalidad")
+
+if 'mes' in df_f.columns:
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Heatmap mes vs año
+        estacionalidad = df_f.groupby(['anio', 'mes']).size().reset_index(name='Incendios')
+        pivot_estacional = estacionalidad.pivot(index='mes', columns='anio', values='Incendios').fillna(0)
+        
+        fig = px.imshow(
+            pivot_estacional,
+            labels=dict(x="Año", y="Mes", color="Incendios"),
+            x=pivot_estacional.columns,
+            y=pivot_estacional.index,
+            color_continuous_scale='Reds',
+            title='Patrón Estacional de Incendios (Mes vs Año)',
+            aspect='auto'
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    
+    with col2:
+        # Calendario mensual de incendios
+        incendios_mes = df_f.groupby('mes').size().reset_index(name='Total_Incendios')
+        
+        fig = px.bar(
+            incendios_mes,
+            x='mes',
+            y='Total_Incendios',
+            title='Distribución Mensual de Incendios',
+            labels={'mes': 'Mes', 'Total_Incendios': 'Número de Incendios'},
+            color='Total_Incendios',
+            color_continuous_scale='Oranges'
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    
+    # Insight estacional
+    mes_critico = df_f.groupby('mes').size().idxmax()
+    st.info(f"Mes crítico: **{mes_critico}** - Aumentar recursos preventivos en este período")
+else:
+    st.warning("Datos de 'mes' no disponibles")
+
+# =====================
+# CLASIFICACIÓN POR SEVERIDAD
+# =====================
+st.subheader("Clasificación por Severidad de Incendios")
+
+# Clasificar incendios por tamaño
+def clasificar_severidad(hectareas):
+    if hectareas < 10:
+        return 'Pequeño (<10 ha)'
+    elif hectareas < 100:
+        return 'Mediano (10-100 ha)'
+    elif hectareas < 1000:
+        return 'Grande (100-1000 ha)'
+    else:
+        return 'Catastrófico (>1000 ha)'
+
+df_f['Severidad'] = df_f['Total_hectareas'].apply(clasificar_severidad)
+
+col1, col2 = st.columns(2)
+
+with col1:
+    # Distribución por severidad
+    severidad_count = df_f['Severidad'].value_counts().reset_index()
+    severidad_count.columns = ['Severidad', 'Frecuencia']
+    
+    fig = px.pie(
+        severidad_count,
+        values='Frecuencia',
+        names='Severidad',
+        title='Distribución de Incendios por Severidad',
+        color_discrete_sequence=px.colors.sequential.Reds
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+with col2:
+    # Severidad por estado (top 10)
+    severidad_estado = df_f.groupby(['Estado', 'Severidad']).size().reset_index(name='Cantidad')
+    top_estados = df_f['Estado'].value_counts().head(10).index
+    severidad_top = severidad_estado[severidad_estado['Estado'].isin(top_estados)]
+    
+    fig = px.bar(
+        severidad_top,
+        x='Estado',
+        y='Cantidad',
+        color='Severidad',
+        title='Severidad de Incendios por Estado (Top 10)',
+        labels={'Cantidad': 'Número de Incendios'},
+        barmode='stack'
+    )
+    fig.update_xaxes(tickangle=45)
+    st.plotly_chart(fig, use_container_width=True)
+
+# Estadísticas de severidad
+pct_controlables = ((df_f['Total_hectareas'] < 100).sum() / len(df_f)) * 100
+pct_catastroficos = ((df_f['Total_hectareas'] >= 1000).sum() / len(df_f)) * 100
+st.metric("Incendios controlables (<100 ha)", f"{pct_controlables:.1f}%")
+st.caption(f"Incendios catastróficos (≥1000 ha): {pct_catastroficos:.1f}%")
+
+# =====================
+# COMPARATIVO AÑO A AÑO
+# =====================
+st.subheader("Análisis Comparativo Año a Año")
+
+if len(df_f['anio'].unique()) >= 2:
+    anios_disponibles = sorted(df_f['anio'].unique(), reverse=True)
+    anio_actual = anios_disponibles[0]
+    anio_anterior = anios_disponibles[1] if len(anios_disponibles) > 1 else anio_actual - 1
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    # KPIs comparativos
+    actual = df_f[df_f['anio'] == anio_actual]
+    anterior = df_f[df_f['anio'] == anio_anterior]
+    
+    if len(anterior) > 0:
+        delta_incendios = len(actual) - len(anterior)
+        delta_hectareas = actual['Total_hectareas'].sum() - anterior['Total_hectareas'].sum()
+        delta_duracion = (actual['Duracion'].mean() - anterior['Duracion'].mean()) / 3600
+        delta_llegada = (actual['Llegada'].mean() - anterior['Llegada'].mean()) / 3600
+        
+        col1.metric(
+            f"Incendios {anio_actual}",
+            f"{len(actual):,}",
+            f"{delta_incendios:+,}",
+            delta_color="inverse"
+        )
+        
+        col2.metric(
+            f"Hectáreas {anio_actual}",
+            f"{actual['Total_hectareas'].sum():,.0f}",
+            f"{delta_hectareas:+,.0f}",
+            delta_color="inverse"
+        )
+        
+        col3.metric(
+            f"Duración prom {anio_actual}",
+            f"{(actual['Duracion'].mean() / 3600):.1f} hrs",
+            f"{delta_duracion:+.1f} hrs",
+            delta_color="inverse"
+        )
+        
+        col4.metric(
+            f"Llegada prom {anio_actual}",
+            f"{(actual['Llegada'].mean() / 3600):.1f} hrs",
+            f"{delta_llegada:+.1f} hrs",
+            delta_color="inverse"
+        )
+    
+    # Variación porcentual YoY por mes
+    if 'mes' in df_f.columns:
+        yoy_mes = df_f[df_f['anio'].isin([anio_actual, anio_anterior])].groupby(['anio', 'mes']).size().reset_index(name='Incendios')
+        
+        fig = px.line(
+            yoy_mes,
+            x='mes',
+            y='Incendios',
+            color='anio',
+            title=f'Comparación Mensual {anio_anterior} vs {anio_actual}',
+            labels={'mes': 'Mes', 'Incendios': 'Número de Incendios', 'anio': 'Año'},
+            markers=True
+        )
+        st.plotly_chart(fig, use_container_width=True)
+else:
+    st.info("Necesitas datos de al menos 2 años para comparación")
+
+# =====================
+# BENCHMARKING ENTRE ESTADOS
+# =====================
+st.subheader("Benchmarking de Eficiencia entre Estados")
+
+# Calcular métricas de eficiencia por estado
+eficiencia_estados = df_f.groupby('Estado').agg({
+    'Llegada': lambda x: (x.mean() / 3600),  # Convertir a horas
+    'Duracion': lambda x: (x.mean() / 3600),
+    'Total_hectareas': 'mean'
+}).reset_index()
+
+eficiencia_estados.columns = ['Estado', 'Tiempo_Llegada_hrs', 'Duracion_hrs', 'Hectareas_Promedio']
+
+# Calcular % de respuestas rápidas por estado
+respuestas_rapidas = df_f.groupby('Estado').apply(
+    lambda x: ((x['Llegada'] <= 7200).sum() / len(x)) * 100
+).reset_index(name='Pct_Rapidas')
+
+eficiencia_estados = eficiencia_estados.merge(respuestas_rapidas, on='Estado')
+
+# Top 10 estados más eficientes (menor tiempo llegada y mayor % rápidas)
+eficiencia_estados['Score_Eficiencia'] = (100 - eficiencia_estados['Pct_Rapidas']) + eficiencia_estados['Tiempo_Llegada_hrs']
+top_eficientes = eficiencia_estados.nsmallest(10, 'Score_Eficiencia')
+
+col1, col2 = st.columns(2)
+
+with col1:
+    fig = px.bar(
+        top_eficientes,
+        x='Pct_Rapidas',
+        y='Estado',
+        orientation='h',
+        title='Top 10 Estados: % Respuestas Rápidas (≤2 hrs)',
+        labels={'Pct_Rapidas': '% Respuestas Rápidas', 'Estado': 'Estado'},
+        color='Pct_Rapidas',
+        color_continuous_scale='Greens'
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+with col2:
+    fig = px.scatter(
+        eficiencia_estados,
+        x='Tiempo_Llegada_hrs',
+        y='Hectareas_Promedio',
+        size='Duracion_hrs',
+        color='Pct_Rapidas',
+        hover_data=['Estado'],
+        title='Eficiencia: Tiempo vs Daño por Estado',
+        labels={
+            'Tiempo_Llegada_hrs': 'Tiempo Llegada (hrs)',
+            'Hectareas_Promedio': 'Hectáreas Promedio',
+            'Pct_Rapidas': '% Rápidas'
+        },
+        color_continuous_scale='RdYlGn'
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+# Estados con mejores prácticas
+mejor_estado = eficiencia_estados.nsmallest(1, 'Score_Eficiencia')['Estado'].values[0]
+st.success(f"Estado con mejores prácticas: **{mejor_estado}** - Replicar estrategias")
+
+# =====================
+# ANÁLISIS DE RIESGO GEOGRÁFICO
+# =====================
+st.subheader("Análisis de Riesgo Geográfico")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    # Densidad de incendios por estado
+    densidad = df_f['Estado'].value_counts().reset_index()
+    densidad.columns = ['Estado', 'Frecuencia']
+    densidad_top15 = densidad.head(15)
+    
+    fig = px.bar(
+        densidad_top15,
+        x='Frecuencia',
+        y='Estado',
+        orientation='h',
+        title='Densidad de Incendios por Estado (Top 15)',
+        labels={'Frecuencia': 'Número de Incendios', 'Estado': 'Estado'},
+        color='Frecuencia',
+        color_continuous_scale='Reds'
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+with col2:
+    # Zonas de alto riesgo recurrente (estados con incendios frecuentes y grandes)
+    riesgo_alto = df_f.groupby('Estado').agg({
+        'Total_hectareas': ['sum', 'count']
+    }).reset_index()
+    riesgo_alto.columns = ['Estado', 'Total_Hectareas', 'Num_Incendios']
+    riesgo_alto['Riesgo_Score'] = riesgo_alto['Total_Hectareas'] * riesgo_alto['Num_Incendios']
+    
+    fig = px.scatter(
+        riesgo_alto,
+        x='Num_Incendios',
+        y='Total_Hectareas',
+        size='Riesgo_Score',
+        color='Riesgo_Score',
+        hover_data=['Estado'],
+        title='Zonas de Alto Riesgo: Frecuencia vs Impacto',
+        labels={
+            'Num_Incendios': 'Frecuencia de Incendios',
+            'Total_Hectareas': 'Hectáreas Totales Afectadas',
+            'Riesgo_Score': 'Score de Riesgo'
+        },
+        color_continuous_scale='Reds'
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+# Recomendación de estaciones
+zonas_criticas = riesgo_alto.nlargest(5, 'Riesgo_Score')['Estado'].tolist()
+st.warning(f"Zonas prioritarias para estaciones: {', '.join(zonas_criticas)}")
+
+# =====================
+# EFICIENCIA DE COMBATE
+# =====================
+st.subheader("Análisis de Eficiencia de Combate")
+
+# Calcular tasa de propagación
+df_f['Tasa_Propagacion'] = df_f.apply(
+    lambda row: (row['Total_hectareas'] / (row['Duracion'] / 3600)) if row['Duracion'] > 0 else 0,
+    axis=1
+)
+
+col1, col2 = st.columns(2)
+
+with col1:
+    # Tasa de propagación por tipo de vegetación
+    tasa_vegetacion = df_f.groupby('Tipo_Vegetacion')['Tasa_Propagacion'].mean().reset_index()
+    tasa_vegetacion = tasa_vegetacion.sort_values('Tasa_Propagacion', ascending=False)
+    
+    fig = px.bar(
+        tasa_vegetacion,
+        x='Tasa_Propagacion',
+        y='Tipo_Vegetacion',
+        orientation='h',
+        title='Tasa de Propagación por Vegetación (ha/hora)',
+        labels={'Tasa_Propagacion': 'Hectáreas/Hora', 'Tipo_Vegetacion': 'Tipo de Vegetación'},
+        color='Tasa_Propagacion',
+        color_continuous_scale='Reds'
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+with col2:
+    # Boxplot de eficiencia por vegetación
+    fig = px.box(
+        df_f[df_f['Tasa_Propagacion'] < df_f['Tasa_Propagacion'].quantile(0.95)],  # Remover outliers
+        x='Tipo_Vegetacion',
+        y='Tasa_Propagacion',
+        title='Distribución de Tasa de Propagación',
+        labels={'Tasa_Propagacion': 'Hectáreas/Hora', 'Tipo_Vegetacion': 'Vegetación'}
+    )
+    fig.update_xaxes(tickangle=45)
+    st.plotly_chart(fig, use_container_width=True)
+
+# Vegetación más difícil de controlar
+veg_dificil = tasa_vegetacion.nlargest(1, 'Tasa_Propagacion')['Tipo_Vegetacion'].values[0]
+st.error(f"Vegetación más difícil de controlar: **{veg_dificil}** - Requiere protocolos especiales")
+
+# =====================
+# PROYECCIONES Y TENDENCIAS
+# =====================
+st.subheader("Proyecciones y Tendencias")
+
+# Tendencia anual con forecast simple
+tendencia_anual = df_f.groupby('anio').agg({
+    'Total_hectareas': 'sum',
+}).reset_index()
+tendencia_anual.columns = ['Año', 'Hectareas_Totales']
+
+# Agregar línea de tendencia
+from sklearn.linear_model import LinearRegression
+
+X = tendencia_anual[['Año']].values
+y = tendencia_anual['Hectareas_Totales'].values
+
+modelo = LinearRegression()
+modelo.fit(X, y)
+
+# Proyección próximos 3 años
+anios_futuros = np.array([[tendencia_anual['Año'].max() + i] for i in range(1, 4)])
+proyeccion = modelo.predict(anios_futuros)
+
+# Crear dataframe para gráfica
+proyeccion_df = pd.DataFrame({
+    'Año': anios_futuros.flatten(),
+    'Hectareas_Totales': proyeccion,
+    'Tipo': 'Proyección'
+})
+
+tendencia_anual['Tipo'] = 'Histórico'
+datos_completos = pd.concat([tendencia_anual, proyeccion_df])
+
+fig = px.line(
+    datos_completos,
+    x='Año',
+    y='Hectareas_Totales',
+    color='Tipo',
+    title='Tendencia Histórica y Proyección de Hectáreas Quemadas',
+    labels={'Hectareas_Totales': 'Hectáreas Totales', 'Año': 'Año'},
+    markers=True
+)
+fig.update_traces(line=dict(dash='dash'), selector=dict(name='Proyección'))
+st.plotly_chart(fig, use_container_width=True)
+
+# Tendencia de incidentes
+tendencia_incidentes = df_f.groupby('anio').size().reset_index(name='Incendios')
+X_inc = tendencia_incidentes[['anio']].values
+y_inc = tendencia_incidentes['Incendios'].values
+
+modelo_inc = LinearRegression()
+modelo_inc.fit(X_inc, y_inc)
+tendencia_inc = modelo_inc.coef_[0]
+
+if tendencia_inc > 0:
+    st.warning(f"Tendencia al alza: +{tendencia_inc:.1f} incendios/año promedio")
+else:
+    st.success(f"Tendencia a la baja: {tendencia_inc:.1f} incendios/año promedio")
+
+# =====================
+# ANÁLISIS COSTO-BENEFICIO
+# =====================
+st.subheader("Análisis de Recursos vs Impacto")
+
+# Scatter 3D: Llegada vs Duración vs Hectáreas
+df_temp = df_f.copy()
+df_temp['Llegada_hrs'] = df_temp['Llegada'] / 3600
+df_temp['Duracion_hrs'] = df_temp['Duracion'] / 3600
+
+# Remover outliers para mejor visualización
+df_3d = df_temp[
+    (df_temp['Llegada_hrs'] < df_temp['Llegada_hrs'].quantile(0.95)) &
+    (df_temp['Duracion_hrs'] < df_temp['Duracion_hrs'].quantile(0.95)) &
+    (df_temp['Total_hectareas'] < df_temp['Total_hectareas'].quantile(0.95))
+]
+
+fig = px.scatter_3d(
+    df_3d.sample(min(1000, len(df_3d))),  # Muestra para rendimiento
+    x='Llegada_hrs',
+    y='Duracion_hrs',
+    z='Total_hectareas',
+    color='Tipo_Vegetacion',
+    title='Relación 3D: Tiempo Llegada - Duración - Impacto',
+    labels={
+        'Llegada_hrs': 'Tiempo Llegada (hrs)',
+        'Duracion_hrs': 'Duración (hrs)',
+        'Total_hectareas': 'Hectáreas'
+    }
+)
+st.plotly_chart(fig, use_container_width=True)
+
+# Costo-beneficio de respuesta rápida
+col1, col2 = st.columns(2)
+
+with col1:
+    st.markdown("### Impacto de Respuesta Temprana")
+    
+    # Comparar cuartiles de tiempo de llegada
+    df_temp['Cuartil_Llegada'] = pd.qcut(df_temp['Llegada'], q=4, labels=['Q1 (Rápido)', 'Q2', 'Q3', 'Q4 (Lento)'])
+    impacto_cuartil = df_temp.groupby('Cuartil_Llegada')['Total_hectareas'].mean().reset_index()
+    
+    fig = px.bar(
+        impacto_cuartil,
+        x='Cuartil_Llegada',
+        y='Total_hectareas',
+        title='Hectáreas Promedio por Velocidad de Respuesta',
+        labels={'Cuartil_Llegada': 'Velocidad de Respuesta', 'Total_hectareas': 'Hectáreas Promedio'},
+        color='Total_hectareas',
+        color_continuous_scale='Reds'
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+with col2:
+    st.markdown("### ROI de Inversión en Respuesta")
+    
+    ha_rapido = df_temp[df_temp['Llegada'] <= 7200]['Total_hectareas'].mean()
+    ha_lento = df_temp[df_temp['Llegada'] > 7200]['Total_hectareas'].mean()
+    
+    if pd.notna(ha_rapido) and pd.notna(ha_lento):
+        ahorro_ha = ha_lento - ha_rapido
+        ahorro_pct = (ahorro_ha / ha_lento) * 100 if ha_lento > 0 else 0
+        
+        st.metric("Ahorro promedio por respuesta rápida", f"{ahorro_ha:.1f} ha")
+        st.metric("Reducción porcentual", f"{ahorro_pct:.1f}%")
+        
+        # Estimación económica (aproximado)
+        costo_ha = 50000  # Costo estimado por hectárea
+        ahorro_economico = ahorro_ha * costo_ha
+        st.metric("Ahorro económico estimado", f"${ahorro_economico:,.0f} MXN")
+        
+        st.caption("Basado en costo promedio de $50,000 MXN por hectárea afectada")
 
 # =====================
 # PCA - ANÁLISIS AVANZADO
