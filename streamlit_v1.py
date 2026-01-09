@@ -33,6 +33,7 @@ df = load_data()
 # SIDEBAR - FILTROS
 # =====================
 st.sidebar.header("Filtros")
+st.sidebar.markdown("*Deja vacío para seleccionar TODOS*")
 
 years = st.sidebar.slider(
     "Año",
@@ -43,17 +44,52 @@ years = st.sidebar.slider(
 
 estado = st.sidebar.multiselect(
     "Estado",
-    options=sorted(df.Estado.unique())
+    options=sorted(df.Estado.unique()),
+    default=None,
+    placeholder="TODOS"
 )
 
 vegetacion = st.sidebar.multiselect(
     "Tipo de Vegetación",
-    options=sorted(df.Tipo_Vegetacion.unique())
+    options=sorted(df.Tipo_Vegetacion.unique()),
+    default=None,
+    placeholder="TODOS"
+)
+
+causa = st.sidebar.multiselect(
+    "Causa",
+    options=sorted(df.Causa.unique()) if 'Causa' in df.columns else [],
+    default=None,
+    placeholder="TODOS"
+)
+
+mes = st.sidebar.multiselect(
+    "Mes",
+    options=sorted(df.mes.unique()) if 'mes' in df.columns else [],
+    default=None,
+    placeholder="TODOS"
+)
+
+# Rango de hectáreas
+st.sidebar.markdown("### Rango de Hectáreas")
+hectareas_min = st.sidebar.number_input(
+    "Mínimo",
+    min_value=0.0,
+    max_value=float(df.Total_hectareas.max()),
+    value=0.0
+)
+
+hectareas_max = st.sidebar.number_input(
+    "Máximo",
+    min_value=0.0,
+    max_value=float(df.Total_hectareas.max()),
+    value=float(df.Total_hectareas.max())
 )
 
 # Aplicación de filtros
 df_f = df[
-    (df.anio.between(years[0], years[1]))
+    (df.anio.between(years[0], years[1])) &
+    (df.Total_hectareas.between(hectareas_min, hectareas_max))
 ]
 
 if estado:
@@ -61,6 +97,35 @@ if estado:
 
 if vegetacion:
     df_f = df_f[df_f.Tipo_Vegetacion.isin(vegetacion)]
+
+if causa and 'Causa' in df.columns:
+    df_f = df_f[df_f.Causa.isin(causa)]
+
+if mes and 'mes' in df.columns:
+    df_f = df_f[df_f.mes.isin(mes)]
+
+# Mostrar filtros activos
+st.sidebar.markdown("---")
+st.sidebar.markdown("### Filtros Activos")
+if not estado:
+    st.sidebar.info("Estados: **TODOS**")
+else:
+    st.sidebar.success(f"Estados: {len(estado)} seleccionado(s)")
+
+if not vegetacion:
+    st.sidebar.info("Vegetación: **TODOS**")
+else:
+    st.sidebar.success(f"Vegetación: {len(vegetacion)} seleccionado(s)")
+
+if not causa:
+    st.sidebar.info("Causas: **TODOS**")
+else:
+    st.sidebar.success(f"Causas: {len(causa)} seleccionado(s)")
+
+if not mes:
+    st.sidebar.info("Meses: **TODOS**")
+else:
+    st.sidebar.success(f"Meses: {len(mes)} seleccionado(s)")
 
 # =====================
 # KPIs PRINCIPALES
@@ -77,7 +142,7 @@ c4.metric("Tiempo Llegada Promedio", f"{df_f.Llegada.mean():.2f}")
 # =====================
 # ANÁLISIS TEMPORAL
 # =====================
-st.subheader("📈 Evolución Temporal")
+st.subheader("Evolución Temporal")
 
 col1, col2 = st.columns(2)
 
