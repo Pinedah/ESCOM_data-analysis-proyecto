@@ -1,4 +1,4 @@
-# Dashboard de Análisis de Incendios Forestales 🔥
+# Dashboard de Análisis de Incendios Forestales
 
 Proyecto final de Analítica y Visualización de Datos - ESCOM IPN
 
@@ -42,7 +42,7 @@ streamlit-folium   # Integración de Folium con Streamlit
 ### 1. Clonar el Repositorio
 
 ```bash
-git clone https://github.com/tu-usuario/ESCOM_data-analysis-proyecto.git
+git clone https://github.com/pinedah/ESCOM_data-analysis-proyecto.git
 cd ESCOM_data-analysis-proyecto
 ```
 
