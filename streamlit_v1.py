@@ -6,6 +6,7 @@ import plotly.graph_objects as go
 
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
+from scipy import stats
 
 from streamlit_folium import st_folium
 import folium
@@ -1056,6 +1057,154 @@ if len(vars_corr_disponibles) >= 2:
         st.info("No hay suficientes datos válidos para calcular correlaciones con los filtros actuales")
 else:
     st.warning("Se requieren al menos 2 variables para calcular correlaciones")
+
+# =====================
+# PRUEBA DE HIPÓTESIS
+# =====================
+st.subheader("Prueba de Hipótesis: Correlación entre Duración y Hectáreas Afectadas")
+
+# Verificar que existan las columnas necesarias
+if 'Duracion' in df_f.columns and 'Total_hectareas' in df_f.columns:
+    # Filtrar datos válidos
+    df_hipotesis = df_f[['Duracion', 'Total_hectareas']].dropna()
+    
+    if len(df_hipotesis) >= 3:  # Necesitamos al menos 3 observaciones
+        # Convertir duración a horas para mejor interpretación
+        df_hipotesis['Duracion_hrs'] = df_hipotesis['Duracion'] / 3600
+        
+        # Calcular coeficiente de correlación de Pearson
+        r = df_hipotesis['Duracion_hrs'].corr(df_hipotesis['Total_hectareas'])
+        n = len(df_hipotesis)
+        
+        # Hipótesis
+        st.markdown("### Hipótesis")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("""
+            **H₀ (Hipótesis Nula):**  
+            No existe correlación entre la duración del incendio y las hectáreas afectadas.  
+            ρ = 0
+            """)
+        
+        with col2:
+            st.markdown("""
+            **Hₐ (Hipótesis Alternativa):**  
+            Existe correlación entre la duración del incendio y las hectáreas afectadas.  
+            ρ ≠ 0
+            """)
+        
+        st.markdown("---")
+        
+        # Transformación a t de Student
+        # t = r * sqrt(n-2) / sqrt(1-r²)
+        if abs(r) < 1:  # Evitar división por cero
+            t_stat = r * np.sqrt(n - 2) / np.sqrt(1 - r**2)
+            grados_libertad = n - 2
+            
+            # Calcular valor p (prueba bilateral)
+            p_valor = 2 * (1 - stats.t.cdf(abs(t_stat), grados_libertad))
+            
+            # Nivel de significancia
+            alpha = 0.05
+            
+            # Valor crítico
+            t_critico = stats.t.ppf(1 - alpha/2, grados_libertad)
+            
+            # Resultados
+            st.markdown("### Resultados de la Prueba")
+            
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.metric("Coeficiente de Correlación (r)", f"{r:.4f}")
+            
+            with col2:
+                st.metric("Estadístico t", f"{t_stat:.4f}")
+            
+            with col3:
+                st.metric("Valor p", f"{p_valor:.6f}")
+            
+            with col4:
+                st.metric("Tamaño de Muestra (n)", f"{n:,}")
+            
+            st.markdown("---")
+            
+            # Información adicional
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown(f"""
+                **Parámetros de la Prueba:**
+                - Nivel de significancia (α): {alpha}
+                - Grados de libertad: {grados_libertad:,}
+                - Valor crítico (t): ±{t_critico:.4f}
+                """)
+            
+            with col2:
+                st.markdown(f"""
+                **Comparación:**
+                - |t estadístico| = {abs(t_stat):.4f}
+                - t crítico = {t_critico:.4f}
+                - p-valor = {p_valor:.6f}
+                - α = {alpha}
+                """)
+            
+            st.markdown("---")
+            
+            # Decisión
+            st.markdown("### Decisión")
+            
+            if p_valor < alpha:
+                st.success(f"""
+                **Se RECHAZA la hipótesis nula (H₀)**
+                
+                **Conclusión:**  
+                Con un nivel de significancia del {alpha*100}%, existe evidencia estadística suficiente para afirmar que 
+                **SÍ existe una correlación significativa** entre la duración del incendio y las hectáreas afectadas.
+                
+                - El coeficiente de correlación es r = {r:.4f}
+                - El valor p ({p_valor:.6f}) es menor que α ({alpha})
+                - El estadístico t ({t_stat:.4f}) {"supera" if abs(t_stat) > t_critico else "no supera"} el valor crítico (±{t_critico:.4f})
+                
+                **Interpretación práctica:**  
+                {'Existe una relación positiva: a mayor duración, mayor es el área afectada.' if r > 0 else 'Existe una relación negativa: a mayor duración, menor es el área afectada.'}
+                """)
+            else:
+                st.error(f"""
+                **NO se rechaza la hipótesis nula (H₀)**
+                
+                **Conclusión:**  
+                Con un nivel de significancia del {alpha*100}%, NO existe evidencia estadística suficiente para afirmar que 
+                existe correlación entre la duración del incendio y las hectáreas afectadas.
+                
+                - El coeficiente de correlación es r = {r:.4f}
+                - El valor p ({p_valor:.6f}) es mayor que α ({alpha})
+                - El estadístico t ({t_stat:.4f}) no supera el valor crítico (±{t_critico:.4f})
+                """)
+            
+            # Gráfica de dispersión con línea de tendencia
+            st.markdown("### Visualización de la Relación")
+            
+            fig = px.scatter(
+                df_hipotesis,
+                x='Duracion_hrs',
+                y='Total_hectareas',
+                trendline='ols',
+                title=f'Relación entre Duración y Hectáreas Afectadas (r = {r:.4f}, p = {p_valor:.6f})',
+                labels={'Duracion_hrs': 'Duración (horas)', 'Total_hectareas': 'Hectáreas Afectadas'},
+                opacity=0.6
+            )
+            
+            fig.update_layout(height=500)
+            st.plotly_chart(fig, use_container_width=True)
+            
+        else:
+            st.warning("La correlación es perfecta (r = ±1), no se puede calcular el estadístico t")
+    else:
+        st.info("Se requieren al menos 3 observaciones válidas para realizar la prueba de hipótesis")
+else:
+    st.warning("Las columnas 'Duracion' y/o 'Total_hectareas' no están disponibles en los datos")
 
 # =====================
 # TABLA DE DATOS
