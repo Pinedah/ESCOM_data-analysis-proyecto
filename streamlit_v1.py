@@ -1178,14 +1178,36 @@ if 'Duracion' in df_f.columns and 'Total_hectareas' in df_f.columns:
             # Gráfica de dispersión con línea de tendencia
             st.markdown("### Visualización de la Relación")
             
+            # Crear gráfica de dispersión
             fig = px.scatter(
                 df_hipotesis,
                 x='Duracion_hrs',
                 y='Total_hectareas',
-                trendline='ols',
                 title=f'Relación entre Duración y Hectáreas Afectadas (r = {r:.4f}, p = {p_valor:.6f})',
                 labels={'Duracion_hrs': 'Duración (horas)', 'Total_hectareas': 'Hectáreas Afectadas'},
                 opacity=0.6
+            )
+            
+            # Calcular línea de tendencia manualmente
+            x_vals = df_hipotesis['Duracion_hrs'].values
+            y_vals = df_hipotesis['Total_hectareas'].values
+            
+            # Regresión lineal: y = mx + b
+            m, b = np.polyfit(x_vals, y_vals, 1)
+            
+            # Crear línea de tendencia
+            x_trend = np.linspace(x_vals.min(), x_vals.max(), 100)
+            y_trend = m * x_trend + b
+            
+            # Agregar línea de tendencia a la gráfica
+            fig.add_trace(
+                go.Scatter(
+                    x=x_trend,
+                    y=y_trend,
+                    mode='lines',
+                    name='Línea de tendencia',
+                    line=dict(color='red', width=2)
+                )
             )
             
             fig.update_layout(height=500)
