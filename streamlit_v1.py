@@ -38,7 +38,6 @@ ORDEN_MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
 # SIDEBAR - FILTROS
 # =====================
 st.sidebar.header("Filtros")
-st.sidebar.markdown("*Deja vacío para seleccionar TODOS*")
 
 years = st.sidebar.slider(
     "Año",
@@ -113,7 +112,7 @@ if mes and 'Mes_Nombre' in df.columns:
 # VALIDACIÓN DE DATOS FILTRADOS
 # =====================
 if df_f.empty:
-    st.error("⚠️ No se encontraron datos con los filtros seleccionados")
+    st.error("No se encontraron datos con los filtros seleccionados")
     st.info("Por favor ajusta los filtros en el panel lateral para ver los análisis")
     st.stop()
 
@@ -211,13 +210,13 @@ st.subheader("Mapa de Incendios")
 
 # Validar que existan coordenadas válidas
 if df_f['latitud'].isna().all() or df_f['longitud'].isna().all():
-    st.warning("⚠️ No hay coordenadas válidas disponibles para mostrar el mapa con los filtros seleccionados")
+    st.warning("No hay coordenadas válidas disponibles para mostrar el mapa con los filtros seleccionados")
 else:
     # Filtrar registros con coordenadas válidas
     df_map_valid = df_f.dropna(subset=['latitud', 'longitud'])
     
     if len(df_map_valid) == 0:
-        st.warning("⚠️ No hay coordenadas válidas disponibles para mostrar el mapa con los filtros seleccionados")
+        st.warning("No hay coordenadas válidas disponibles para mostrar el mapa con los filtros seleccionados")
     else:
         mapa = folium.Map(
             location=[df_map_valid.latitud.mean(), df_map_valid.longitud.mean()],
@@ -271,7 +270,7 @@ with col1:
             top_municipios['Hectáreas Totales'] = top_municipios['Hectáreas Totales'].apply(lambda x: f"{x:,.0f}")
             st.dataframe(top_municipios, use_container_width=True, hide_index=True)
         else:
-            st.info("⚠️ No hay suficientes datos para mostrar el ranking con los filtros actuales")
+            st.info("No hay suficientes datos para mostrar el ranking con los filtros actuales")
     else:
         st.warning("La columna 'Municipio' no está disponible en los datos.")
 
@@ -294,7 +293,7 @@ with col2:
         
         st.dataframe(top_incendios, use_container_width=True, hide_index=True)
     else:
-        st.info("⚠️ No hay suficientes datos para mostrar el ranking con los filtros actuales")
+        st.info("No hay suficientes datos para mostrar el ranking con los filtros actuales")
 
 # =====================
 # EFICIENCIA OPERATIVA
@@ -495,7 +494,7 @@ if 'Mes_Nombre' in df_f.columns and len(df_f) > 0:
             )
             st.plotly_chart(fig, use_container_width=True)
         else:
-            st.info("⚠️ No hay suficientes datos para mostrar el patrón estacional con los filtros actuales")
+            st.info("No hay suficientes datos para mostrar el patrón estacional con los filtros actuales")
     
     with col2:
         # Calendario mensual de incendios
@@ -630,6 +629,10 @@ if len(df_f['anio'].unique()) >= 2:
     # Variación porcentual YoY por mes
     if 'Mes_Nombre' in df_f.columns:
         yoy_mes = df_f[df_f['anio'].isin([anio_actual, anio_anterior])].groupby(['anio', 'Mes_Nombre']).size().reset_index(name='Incendios')
+        
+        # Ordenar por año y luego por orden cronológico de meses
+        yoy_mes['Mes_Orden'] = yoy_mes['Mes_Nombre'].apply(lambda x: ORDEN_MESES.index(x) if x in ORDEN_MESES else 99)
+        yoy_mes = yoy_mes.sort_values(['anio', 'Mes_Orden'])
         
         fig = px.line(
             yoy_mes,
@@ -868,7 +871,7 @@ if len(tendencia_anual) >= 2:
     else:
         st.success(f"Tendencia a la baja: {tendencia_inc:.1f} incendios/año promedio")
 else:
-    st.info("⚠️ Se requieren datos de al menos 2 años diferentes para generar proyecciones")
+    st.info("Se requieren datos de al menos 2 años diferentes para generar proyecciones")
 
 # =====================
 # ANÁLISIS COSTO-BENEFICIO
@@ -985,9 +988,9 @@ if all(col in df_f.columns for col in vars_pca):
             f"PC2 = {pca.explained_variance_ratio_[1]:.2%}"
         )
     else:
-        st.info("⚠️ No hay suficientes datos válidos para realizar el análisis PCA con los filtros actuales (se requieren al menos 2 registros completos)")
+        st.info("No hay suficientes datos válidos para realizar el análisis PCA con los filtros actuales (se requieren al menos 2 registros completos)")
 else:
-    st.warning("⚠️ No están disponibles todas las columnas necesarias para el análisis PCA")
+    st.warning("No están disponibles todas las columnas necesarias para el análisis PCA")
 
 # =====================
 # CORRELACIÓN DE PEARSON
@@ -1048,11 +1051,11 @@ if len(vars_corr_disponibles) >= 2:
 
             st.dataframe(df_corr_pairs, use_container_width=True, hide_index=True)
         else:
-            st.info("⚠️ No hay suficientes variables para calcular correlaciones")
+            st.info("No hay suficientes variables para calcular correlaciones")
     else:
-        st.info("⚠️ No hay suficientes datos válidos para calcular correlaciones con los filtros actuales")
+        st.info("No hay suficientes datos válidos para calcular correlaciones con los filtros actuales")
 else:
-    st.warning("⚠️ Se requieren al menos 2 variables para calcular correlaciones")
+    st.warning("Se requieren al menos 2 variables para calcular correlaciones")
 
 # =====================
 # TABLA DE DATOS
