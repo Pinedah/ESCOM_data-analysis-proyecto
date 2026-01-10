@@ -11,9 +11,9 @@ from scipy import stats
 from streamlit_folium import st_folium
 import folium
 
-# =====================
+
 # CONFIGURACIÓN GENERAL
-# =====================
+
 st.set_page_config(
     page_title="Dashboard Incendios Forestales",
     layout="wide"
@@ -22,9 +22,9 @@ st.set_page_config(
 st.title("Dashboard Interactivo de Incendios Forestales")
 st.markdown("Análisis exploratorio, operativo y estratégico")
 
-# =====================
+
 # CARGA DE DATOS
-# =====================
+
 @st.cache_data
 def load_data():
     return pd.read_csv("dataset_limpio.csv")
@@ -35,9 +35,9 @@ df = load_data()
 ORDEN_MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
                'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
 
-# =====================
-# SIDEBAR - FILTROS
-# =====================
+
+#FILTROS
+
 st.sidebar.header("Filtros")
 
 years = st.sidebar.slider(
@@ -109,9 +109,9 @@ if causa and 'Causa' in df.columns:
 if mes and 'Mes_Nombre' in df.columns:
     df_f = df_f[df_f.Mes_Nombre.isin(mes)]
 
-# =====================
+
 # VALIDACIÓN DE DATOS FILTRADOS
-# =====================
+
 if df_f.empty:
     st.error("No se encontraron datos con los filtros seleccionados")
     st.info("Por favor ajusta los filtros en el panel lateral para ver los análisis")
@@ -140,9 +140,9 @@ if not mes:
 else:
     st.sidebar.success(f"Meses: {len(mes)} seleccionado(s)")
 
-# =====================
+
 # KPIs PRINCIPALES
-# =====================
+
 st.subheader("Indicadores Clave")
 
 c1, c2, c3, c4, c5, c6 = st.columns(6)
@@ -154,9 +154,9 @@ c4.metric("Tiempo de llegada", f"{(df_f.Llegada.mean() / 3600):.2f} hrs")
 c5.metric("Estados afectados", f"{df_f.Estado.nunique()}")
 c6.metric("Vegetación más afectada", df_f.Tipo_Vegetacion.value_counts().index[0] if len(df_f) > 0 else "N/A")
 
-# =====================
+
 # ANÁLISIS TEMPORAL
-# =====================
+
 st.subheader("Evolución Temporal")
 
 col1, col2 = st.columns(2)
@@ -179,9 +179,9 @@ with col2:
     )
     st.plotly_chart(fig, use_container_width=True)
 
-# =====================
+
 # ANÁLISIS POR VEGETACIÓN
-# =====================
+
 st.subheader("Incendios por Tipo de Vegetación")
 
 col1, col2 = st.columns(2)
@@ -204,16 +204,15 @@ with col2:
     )
     st.plotly_chart(fig, use_container_width=True)
 
-# =====================
+
 # MAPA INTERACTIVO
-# =====================
+
 st.subheader("Mapa de Incendios")
 
 # Validar que existan coordenadas válidas
 if df_f['latitud'].isna().all() or df_f['longitud'].isna().all():
     st.warning("No hay coordenadas válidas disponibles para mostrar el mapa con los filtros seleccionados")
 else:
-    # Filtrar registros con coordenadas válidas
     df_map_valid = df_f.dropna(subset=['latitud', 'longitud'])
     
     if len(df_map_valid) == 0:
@@ -224,7 +223,6 @@ else:
             zoom_start=5
         )
         
-        # Usar una muestra determinística para evitar re-renderizado constante
         df_map = df_map_valid.sample(min(2000, len(df_map_valid)), random_state=42)
         
         for _, row in df_map.iterrows():
@@ -250,9 +248,9 @@ else:
         
         st_folium(mapa, width=None, height=500, returned_objects=[])
 
-# =====================
+
 # RANKINGS DINÁMICOS
-# =====================
+
 st.subheader("Rankings de Incendios")
 
 col1, col2 = st.columns(2)
@@ -296,9 +294,9 @@ with col2:
     else:
         st.info("No hay suficientes datos para mostrar el ranking con los filtros actuales")
 
-# =====================
+
 # EFICIENCIA OPERATIVA
-# =====================
+
 st.subheader("Eficiencia Operativa")
 
 # Indicadores clave
@@ -307,7 +305,7 @@ col1, col2 = st.columns(2)
 with col1:
     # % de incendios atendidos rápidamente (menos de 2 horas)
     if len(df_f) > 0:
-        rapidos = (df_f['Llegada'] <= 7200).sum()  # 2 horas = 7200 segundos
+        rapidos = (df_f['Llegada'] <= 7200).sum() 
         pct_rapidos = (rapidos / len(df_f)) * 100
         st.metric("Incendios atendidos rápidamente", f"{pct_rapidos:.1f}%", 
                   help="Porcentaje de incendios con tiempo de llegada ≤ 2 horas")
@@ -317,9 +315,9 @@ with col1:
 with col2:
     # Estimación de reducción de daño por respuesta temprana
     if len(df_f) > 0 and 'Llegada' in df_f.columns and 'Total_hectareas' in df_f.columns:
-        # Calcular promedio de hectáreas para respuestas rápidas vs lentas
+        # Calcular promedio
         df_temp = df_f[df_f['Llegada'] > 0].copy()
-        rapidos_ha = df_temp[df_temp['Llegada'] <= 7200]['Total_hectareas'].mean()  # 2 horas = 7200 segundos
+        rapidos_ha = df_temp[df_temp['Llegada'] <= 7200]['Total_hectareas'].mean() 
         lentos_ha = df_temp[df_temp['Llegada'] > 7200]['Total_hectareas'].mean()
         
         if pd.notna(rapidos_ha) and pd.notna(lentos_ha) and lentos_ha > 0:
@@ -399,9 +397,9 @@ with col4:
     else:
         st.info("Datos de 'Duracion' no disponibles")
 
-# =====================
+
 # CAUSAS Y PREVENCIÓN
-# =====================
+
 st.subheader("Análisis de Causas y Prevención")
 
 if 'Causa' in df_f.columns and len(df_f) > 0:
@@ -432,7 +430,6 @@ if 'Causa' in df_f.columns and len(df_f) > 0:
     st.plotly_chart(fig, use_container_width=True)
     
     # Sankey: Causa → Vegetación → Impacto
-    # Preparar datos para Sankey
     sankey_data = df_f.groupby(['Causa', 'Tipo_Vegetacion'])['Total_hectareas'].sum().reset_index()
     sankey_data = sankey_data.nlargest(15, 'Total_hectareas')  # Top 15 para legibilidad
     
@@ -467,9 +464,9 @@ if 'Causa' in df_f.columns and len(df_f) > 0:
 else:
     st.warning("La columna 'Causa' no está disponible en los datos.")
 
-# =====================
+
 # ANÁLISIS DE ESTACIONALIDAD
-# =====================
+
 st.subheader("Análisis de Estacionalidad")
 
 if 'Mes_Nombre' in df_f.columns and len(df_f) > 0:
@@ -519,9 +516,9 @@ if 'Mes_Nombre' in df_f.columns and len(df_f) > 0:
 else:
     st.warning("Datos de 'Mes_Nombre' no disponibles")
 
-# =====================
+
 # CLASIFICACIÓN POR SEVERIDAD
-# =====================
+
 st.subheader("Clasificación por Severidad de Incendios")
 
 # Clasificar incendios por tamaño
@@ -577,9 +574,9 @@ pct_catastroficos = ((df_f['Total_hectareas'] >= 1000).sum() / len(df_f)) * 100
 st.metric("Incendios controlables (<100 ha)", f"{pct_controlables:.1f}%")
 st.caption(f"Incendios catastróficos (≥1000 ha): {pct_catastroficos:.1f}%")
 
-# =====================
+
 # COMPARATIVO AÑO A AÑO
-# =====================
+
 st.subheader("Análisis Comparativo Año a Año")
 
 if len(df_f['anio'].unique()) >= 2:
@@ -627,7 +624,7 @@ if len(df_f['anio'].unique()) >= 2:
             delta_color="inverse"
         )
     
-    # Variación porcentual YoY por mes
+    
     if 'Mes_Nombre' in df_f.columns:
         yoy_mes = df_f[df_f['anio'].isin([anio_actual, anio_anterior])].groupby(['anio', 'Mes_Nombre']).size().reset_index(name='Incendios')
         
@@ -649,9 +646,9 @@ if len(df_f['anio'].unique()) >= 2:
 else:
     st.info("Necesitas datos de al menos 2 años para comparación")
 
-# =====================
+
 # BENCHMARKING ENTRE ESTADOS
-# =====================
+
 st.subheader("Benchmarking de Eficiencia entre Estados")
 
 # Calcular métricas de eficiencia por estado
@@ -711,9 +708,9 @@ with col2:
 mejor_estado = eficiencia_estados.nsmallest(1, 'Score_Eficiencia')['Estado'].values[0]
 st.success(f"Estado con mejores prácticas: **{mejor_estado}** - Replicar estrategias")
 
-# =====================
+
 # ANÁLISIS DE RIESGO GEOGRÁFICO
-# =====================
+
 st.subheader("Análisis de Riesgo Geográfico")
 
 col1, col2 = st.columns(2)
@@ -765,9 +762,9 @@ with col2:
 zonas_criticas = riesgo_alto.nlargest(5, 'Riesgo_Score')['Estado'].tolist()
 st.warning(f"Zonas prioritarias para estaciones: {', '.join(zonas_criticas)}")
 
-# =====================
+
 # EFICIENCIA DE COMBATE
-# =====================
+
 st.subheader("Análisis de Eficiencia de Combate")
 
 # Calcular tasa de propagación
@@ -811,9 +808,9 @@ with col2:
 veg_dificil = tasa_vegetacion.nlargest(1, 'Tasa_Propagacion')['Tipo_Vegetacion'].values[0]
 st.error(f"Vegetación más difícil de controlar: **{veg_dificil}** - Requiere protocolos especiales")
 
-# =====================
+
 # PROYECCIONES Y TENDENCIAS
-# =====================
+
 st.subheader("Proyecciones y Tendencias")
 
 # Tendencia anual con forecast simple
@@ -823,7 +820,6 @@ tendencia_anual = df_f.groupby('anio').agg({
 tendencia_anual.columns = ['Año', 'Hectareas_Totales']
 
 if len(tendencia_anual) >= 2:
-    # Agregar línea de tendencia
     from sklearn.linear_model import LinearRegression
 
     X = tendencia_anual[['Año']].values
@@ -832,7 +828,6 @@ if len(tendencia_anual) >= 2:
     modelo = LinearRegression()
     modelo.fit(X, y)
 
-    # Proyección próximos 3 años
     anios_futuros = np.array([[tendencia_anual['Año'].max() + i] for i in range(1, 4)])
     proyeccion = modelo.predict(anios_futuros)
 
@@ -874,9 +869,9 @@ if len(tendencia_anual) >= 2:
 else:
     st.info("Se requieren datos de al menos 2 años diferentes para generar proyecciones")
 
-# =====================
+
 # ANÁLISIS COSTO-BENEFICIO
-# =====================
+
 st.subheader("Análisis de Recursos vs Impacto")
 
 # Scatter 3D: Llegada vs Duración vs Hectáreas
@@ -947,9 +942,9 @@ with col2:
         
         st.caption("Basado en costo promedio de $50,000 MXN por hectárea afectada")
 
-# =====================
+
 # PCA - ANÁLISIS AVANZADO
-# =====================
+
 st.subheader("Análisis de Componentes Principales (PCA)")
 
 vars_pca = [
@@ -957,7 +952,6 @@ vars_pca = [
     "Herbaceo", "Hojarasca", "Total_hectareas", "Duracion"
 ]
 
-# Verificar que existan las columnas necesarias
 if all(col in df_f.columns for col in vars_pca):
     df_pca = df_f[vars_pca].dropna()
     
@@ -993,9 +987,9 @@ if all(col in df_f.columns for col in vars_pca):
 else:
     st.warning("No están disponibles todas las columnas necesarias para el análisis PCA")
 
-# =====================
+
 # CORRELACIÓN DE PEARSON
-# =====================
+
 st.subheader("Matriz de Correlación de Pearson")
 
 vars_corr = [
@@ -1058,18 +1052,16 @@ if len(vars_corr_disponibles) >= 2:
 else:
     st.warning("Se requieren al menos 2 variables para calcular correlaciones")
 
-# =====================
+
 # PRUEBA DE HIPÓTESIS
-# =====================
+
 st.subheader("Prueba de Hipótesis: Correlación entre Duración y Hectáreas Afectadas")
 
-# Verificar que existan las columnas necesarias
 if 'Duracion' in df_f.columns and 'Total_hectareas' in df_f.columns:
     # Filtrar datos válidos
     df_hipotesis = df_f[['Duracion', 'Total_hectareas']].dropna()
     
-    if len(df_hipotesis) >= 3:  # Necesitamos al menos 3 observaciones
-        # Convertir duración a horas para mejor interpretación
+    if len(df_hipotesis) >= 3:
         df_hipotesis['Duracion_hrs'] = df_hipotesis['Duracion'] / 3600
         
         # Calcular coeficiente de correlación de Pearson
@@ -1098,7 +1090,7 @@ if 'Duracion' in df_f.columns and 'Total_hectareas' in df_f.columns:
         
         # Transformación a t de Student
         # t = r * sqrt(n-2) / sqrt(1-r²)
-        if abs(r) < 1:  # Evitar división por cero
+        if abs(r) < 1: 
             t_stat = r * np.sqrt(n - 2) / np.sqrt(1 - r**2)
             grados_libertad = n - 2
             
@@ -1206,8 +1198,8 @@ if 'Duracion' in df_f.columns and 'Total_hectareas' in df_f.columns:
 else:
     st.warning("Las columnas 'Duracion' y/o 'Total_hectareas' no están disponibles en los datos")
 
-# =====================
+
 # TABLA DE DATOS
-# =====================
+
 st.subheader("Explorador de Datos")
 st.dataframe(df_f, use_container_width=True)
