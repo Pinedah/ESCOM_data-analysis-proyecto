@@ -66,7 +66,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## ▶Ejecución del Proyecto
+## Ejecución del Proyecto
 
 ### Dashboard Interactivo (Streamlit)
 
